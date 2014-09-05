@@ -22,3 +22,4 @@ proxy: main.o mem.o sockets.o socks5.o
 
 clean:
 	rm *.o
+	rm proxy
