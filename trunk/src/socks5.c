@@ -280,8 +280,16 @@ manage_pipeline (struct tcp_socket *sk)
 	}
 	else 
 	{
-	    if (msglen == -1 && errno != EINTR)
-		return -1;
+	    if( errno == ECONNREFUSED)
+	    {
+		sk->peer->state = WAITING_CLOSE;
+		sk->state = CLOSE;
+		sk->peer = NULL_TCP_SOCKET;
+	    }	
+		
+	    if( errno == EINTR)
+		return 0;
+		
 	}    
     }	
     else
@@ -429,13 +437,13 @@ read_all(struct tcp_socket_queue *all, struct tcp_socket_queue *rcv_queue)
     struct tcp_socket *sk_ptr;
     
     
-    
     while ( ( sk_ptr = dequeue_rdy_recv(rcv_queue) ) != NULL )
     {
 	if (sk_ptr->kind == SOCKET_SERVER)
 	{
 	    if (accept_proxy_client(sk_ptr, all) == -1)
 	    {
+		perror("2.1");
 		return -1;
 	    }
 	}
@@ -445,6 +453,7 @@ read_all(struct tcp_socket_queue *all, struct tcp_socket_queue *rcv_queue)
 	    {
 		if (manage_methods(sk_ptr, 0) == -1)
 		{
+		    perror("2.2");
 		    return -1;
 		}
 	    }
@@ -452,6 +461,7 @@ read_all(struct tcp_socket_queue *all, struct tcp_socket_queue *rcv_queue)
 	    {
 		if (manage_connect(sk_ptr) == -1)
 		{
+		    perror("2.3");
 		    return -1;
 		}
 	    }
@@ -459,6 +469,7 @@ read_all(struct tcp_socket_queue *all, struct tcp_socket_queue *rcv_queue)
 	    {
 		if (manage_request(sk_ptr, all) == -1)
 		{
+		    perror("2.4");
 		    return -1;
 		}
 	    }
@@ -466,6 +477,7 @@ read_all(struct tcp_socket_queue *all, struct tcp_socket_queue *rcv_queue)
 	    {
 		if (manage_pipeline(sk_ptr) == -1)
 		{
+		    perror("2.5");
 		    return -1;
 		}
 	    }
@@ -616,12 +628,12 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
 		        counter++;
 		    }
 		}
-		else if ( ptr->state == CONNECTING )
+/*		else if ( ptr->state == CONNECTING )
 		{
 		    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
 		    FD_SET(ptr->socket, &sendset);
 		    counter++;
-		}
+		}*/
 	    }
 	    ptr = ptr->next;
 	}
@@ -654,22 +666,16 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
 		{
 		    if (FD_ISSET(ptr->socket, sendts))
 		    {
-			if (ptr->state == CONNECTING)
-			{
-			    enqueue_rdy_recv(recv_q, ptr);
-			}
-			else
-			{
-			    enqueue_rdy_send(send_q, ptr);
-			}
+		        enqueue_rdy_send(send_q, ptr);
 		    }	
 		}
 		if ( recv_q != NULL )
 		{
-		    if (FD_ISSET(ptr->socket, recvts))
+		    if (FD_ISSET(ptr->socket, recvts) || ptr->state == CONNECTING)
 		    {
 			enqueue_rdy_recv(recv_q, ptr);
 		    }
+		    
 		}	
 		ptr = ptr->next;
 	    }
