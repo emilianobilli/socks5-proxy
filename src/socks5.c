@@ -66,7 +66,7 @@ accept_proxy_client(struct tcp_socket *sk, struct tcp_socket_queue *skq)
 
 
 int
-manage_wmethods (struct tcp_socket *sk, int passwd)
+manage_methods (struct tcp_socket *sk, int passwd)
 {
     struct socks_auth *authhdr;
     struct msgbuff     *msg;
@@ -148,7 +148,7 @@ manage_wmethods (struct tcp_socket *sk, int passwd)
 
 
 int 
-manage_wrequest (struct tcp_socket *sk, struct tcp_socket_queue *skq)
+manage_request (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 {
     struct socks_hdr   *hdr;
     struct sockaddr_in  addr4;
@@ -197,6 +197,7 @@ manage_wrequest (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 		    sk_ptr = alloc_tcp_socket();
 		    if ( sk_ptr != NULL_TCP_SOCKET )
 		    {
+			sk_ptr->family = AF_INET;
 			sk_ptr->socket = sd;
 			sk_ptr->state  = CONNECTING;
 		        sk_ptr->kind   = SOCKET_PEER;    
@@ -221,6 +222,7 @@ manage_wrequest (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 		    sk_ptr = alloc_tcp_socket();
 		    if ( sk_ptr != NULL_TCP_SOCKET )
 		    {
+			sk_ptr->family = AF_INET6;
 		        sk_ptr->socket = sd;
 		        sk_ptr->state  = CONNECTING;
 		        sk_ptr->kind   = SOCKET_PEER;    
@@ -244,7 +246,7 @@ manage_wrequest (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 
 
 int 
-manage_wusepass (struct tcp_socket *sk)
+manage_usepass (struct tcp_socket *sk)
 {
     return 0;
 }
@@ -290,80 +292,133 @@ manage_pipeline (struct tcp_socket *sk)
 }
 
 int 
-manage_wconnect (struct tcp_socket *sk)
+manage_connect (struct tcp_socket *sk)
 {
-    int sd;
+    int sd = 0;
+    int cnt_status;
     struct sockaddr_in  addr4;
     struct sockaddr_in6 addr6;
     struct socks_hdr    *hdr;
     struct msgbuff      *msg;
+    u_int8_t		errcode;
+    socklen_t		addrlen;
+    size_t		iplen;
+    size_t		bufflen;
     
-    if ( sk->kind == SOCKET_PASV && sk->state == WAITING_CONNECTION )
+    
+    errno = 0;
+    if ( sk->kind == SOCKET_PASV && sk->state == WAITING_CONNECTION)
     {
-	errno = 0;
 	if ( sk->family == AF_INET )
 	{
 	    sd = accept_tcp_ipv4(sk->socket, &addr4);
-	    if ( sd != -1 ) 
-	    {
-		sk->kind         = SOCKET_PEER;
-	        sk->state        = PIPELINE;
-	        sk->peer->state  = PIPELINE;
-	        close(sk->socket);
-	        sk->socket      = sd;
-	    
-		msg = alloc_msg_buffer(SZS5HDR + 4 + 2);
-		if (msg != NULL)
-		{ 
-		    hdr = (struct socks_hdr *) msg->buffer;
-		    hdr->ver = 0x05;
-		    hdr->kind.rep = SUCCESS;
-		    hdr->rsv      = 0x00;
-		    hdr->atyp     = IPV4ADDR;
-		    memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR], &addr4.sin_addr.s_addr, 4);
-		    memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR+4], &addr4.sin_port, 2);
-		    enqueue_pending_msg(&(sk->peer->msgq), msg);
-		}
-		else
-		    return -1;
-	    }
-	    else
-	    {
-		if (errno != EINTR)
-		    return -1;
-	    }
+	    iplen = 4;
+		
 	}
-	else if ( sk->family == AF_INET6 )
+	else if ( sk->family == AF_INET6)
 	{
 	    sd = accept_tcp_ipv6(sk->socket, &addr6);
-	    if ( sd != -1 ) 
+	    iplen = 16;
+	}
+	else
+	{
+	    return -1;
+	}
+	
+	if ( sd == -1 )
+	{
+	    if (errno == EINTR)
+		return 0;
+	    else
+		errcode = SFAILURE;
+	}
+	else
+	{
+	    close(sk->socket);
+	    sk->socket = sd;
+	    errcode = SUCCESS;
+	}
+    }
+    else if ( sk->kind == SOCKET_PEER && sk->state == CONNECTING )
+    {
+	if (connection_status(sk->socket, &cnt_status) == -1)
+	{
+	    errcode = SFAILURE;
+	}
+
+	if (cnt_status == 0)
+	{
+	    errcode = SUCCESS;
+
+	    if (sk->family == AF_INET)
 	    {
-		sk->kind         = SOCKET_PEER;
-	        sk->state        = PIPELINE;
-	        sk->peer->state  = PIPELINE;
-	        close(sk->socket);
-	        sk->socket      = sd;
-		msg = alloc_msg_buffer(SZS5HDR + 16 + 2);
-		if (msg != NULL)
-		{ 
-		    hdr = (struct socks_hdr *) msg->buffer;
-		    hdr->ver = 0x05;
-		    hdr->kind.rep = SUCCESS;
-		    hdr->rsv      = 0x00;
-		    hdr->atyp     = IPV6ADDR;
-		    memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR], &addr6.sin6_addr.s6_addr, 16);
-		    memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR+16], &addr6.sin6_port, 2);
-		    enqueue_pending_msg(&(sk->peer->msgq), msg);
+		iplen = 4;
+		addrlen = sizeof(struct sockaddr_in);    
+		if ( getsockname(sk->socket, (struct sockaddr *)&addr4, &addrlen) == -1 )
+		{
+		    errcode = SFAILURE;
+		}
+	    }
+	    else if (sk->family == AF_INET6)
+	    {
+		iplen = 16;
+		addrlen = sizeof(struct sockaddr_in);
+		if ( getsockname(sk->socket, (struct sockaddr *)&addr6, &addrlen) == -1 )
+		{
+		    errcode = SFAILURE;
 		}
 	    }
 	    else
+		return -1;
+	}
+	else
+	{
+	    if (cnt_status == EALREADY || cnt_status == EINPROGRESS )
+		return 0;
+	    else
 	    {
-		if (errno != EINTR)
-		    return -1;
+		if (cnt_status == ENETUNREACH)
+		    errcode = NUNREACHE;
+		else if ( cnt_status == ETIMEDOUT)
+		    errcode = HUNREACHE;
+		else
+		    errcode = SFAILURE;
 	    }
 	}
-	
     }
+    else
+    {
+	return -1;
+    }
+    
+    bufflen = SZS5HDR + iplen + 2;
+    msg = alloc_msg_buffer(bufflen);
+    if (msg == NULL)
+	return -1;
+
+    hdr = (struct socks_hdr *) msg->buffer;
+    hdr->ver = 0x05;
+    hdr->kind.rep = errcode;
+    hdr->rsv      = 0x00;
+    hdr->atyp     = (sk->family == AF_INET) ? IPV4ADDR  : IPV6ADDR;
+    if ( errcode == 0x00 )
+    {
+	memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR], 
+	        (sk->family == AF_INET) ? &addr4.sin_addr.s_addr : &addr6.sin6_addr.s6_addr, iplen);
+	memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR+iplen], 
+	        (sk->family == AF_INET) ? &addr4.sin_port : &addr6.sin6_port, 2);
+    
+
+        sk->peer->state = PENDING_SND_REPLY;    
+	sk->state = PIPELINE;
+    }
+    else
+    {
+	sk->peer->state = WAITING_CLOSE;
+	sk->state = CLOSE;
+	msg->nrbytes = 4;    
+    }     
+    enqueue_pending_msg(&(sk->peer->msgq), msg);
     return 0;
 }
 
@@ -388,14 +443,21 @@ read_all(struct tcp_socket_queue *all, struct tcp_socket_queue *rcv_queue)
 	{
 	    if (sk_ptr->state == WAITING_METHODS)
 	    {
-		if (manage_wmethods(sk_ptr, 0) == -1)
+		if (manage_methods(sk_ptr, 0) == -1)
+		{
+		    return -1;
+		}
+	    }
+	    else if (sk_ptr->state == CONNECTING || sk_ptr->state == WAITING_CONNECTION)
+	    {
+		if (manage_connect(sk_ptr) == -1)
 		{
 		    return -1;
 		}
 	    }
 	    else if (sk_ptr->state == WAITING_REQUEST)
 	    {
-		if (manage_wrequest(sk_ptr, all) == -1)
+		if (manage_request(sk_ptr, all) == -1)
 		{
 		    return -1;
 		}
@@ -553,8 +615,13 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
 		        FD_SET(ptr->socket, &sendset);
 		        counter++;
 		    }
-		
-		}	    
+		}
+		else if ( ptr->state == CONNECTING )
+		{
+		    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
+		    FD_SET(ptr->socket, &sendset);
+		    counter++;
+		}
 	    }
 	    ptr = ptr->next;
 	}
@@ -587,7 +654,14 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
 		{
 		    if (FD_ISSET(ptr->socket, sendts))
 		    {
-			enqueue_rdy_send(send_q, ptr);
+			if (ptr->state == CONNECTING)
+			{
+			    enqueue_rdy_recv(recv_q, ptr);
+			}
+			else
+			{
+			    enqueue_rdy_send(send_q, ptr);
+			}
 		    }	
 		}
 		if ( recv_q != NULL )
@@ -602,150 +676,6 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
 	}
     } 
     return retval;
-}
-
-
-int check_connection (struct tcp_socket_queue *skq)
-{
-    struct sockaddr_in  addr4;
-    struct sockaddr_in6 addr6;
-    struct tcp_socket 	*sk_ptr;
-    struct msgbuff    	*msg;
-    struct socks_hdr  	*hdr;
-    socklen_t		addrlen;
-
-    int so_error;
-    
-    sk_ptr = skq->head; 
-
-    while ( sk_ptr != NULL )
-    {
-	if ( sk_ptr->state == CONNECTING )
-	{
-	    get_so_error(sk_ptr->socket, &so_error);
-	    
-	    if ( so_error == 0 )
-	    {
-		if (sk_ptr->family == AF_INET )
-		{
-		    addrlen = sizeof(struct sockaddr_in);    
-		    if ( getsockname(sk_ptr->socket, (struct sockaddr *)&addr4, &addrlen) == -1 )
-		    {
-		        sk_ptr->state = CLOSE;
-		        msg = alloc_msg_buffer(4);
-		        if ( msg != NULL )
-			{
-		    	    hdr = (struct socks_hdr *)msg->buffer;
-		    	    hdr->ver      = 0x05;
-		    	    hdr->kind.rep = SFAILURE;
-		    	    hdr->rsv      = 0x00;
-		    	    msg->offset   = 0;
-		    	    msg->nrbytes  = 4;
-		    	    sk_ptr->peer->state = WAITING_CLOSE;
-		    	    enqueue_pending_msg(&(sk_ptr->peer->msgq), msg);
-			}
-			else
-			{
-			    return -1;
-					         			
-			}
-		    }
-		    else
-		    {
-			msg = alloc_msg_buffer(4 + 4 + 2);
-			if ( msg != NULL )
-		    	{
-		    	    hdr = (struct socks_hdr *)msg->buffer;
-		    	    hdr->ver      = 0x05;
-		    	    hdr->kind.rep = SUCCESS;
-		    	    hdr->rsv      = 0x00;
-		    	    hdr->atyp	  = IPV4ADDR;
-		    	    msg->offset   = 0;
-		    	    msg->nrbytes  = 4 + 4 + 2;
-		    	    memcpy( &((u_int8_t *)(msg->buffer))[SZS5HDR], &addr4.sin_addr.s_addr, 4 );
-		    	    memcpy( &((u_int8_t *)(msg->buffer))[SZS5HDR+ 4], &addr4.sin_port, 2 );
-		    	    enqueue_pending_msg(&(sk_ptr->peer->msgq), msg);
-	    		    sk_ptr->state = PIPELINE;
-	    		    sk_ptr->peer->state = PENDING_SND_REPLY;
-	    		}
-			else
-			{
-			    return -1;
-			}
-		    }
-		}
-		else
-		{
-		    addrlen = sizeof(struct sockaddr_in6);    
-		    if ( getsockname(sk_ptr->socket, (struct sockaddr *)&addr6, &addrlen) == -1 )
-		    {
-		        sk_ptr->state = CLOSE;
-		        msg = alloc_msg_buffer(4);
-		        if ( msg != NULL )
-			{
-		    	    hdr = (struct socks_hdr *)msg->buffer;
-		    	    hdr->ver      = 0x05;
-		    	    hdr->kind.rep = SFAILURE;
-		    	    hdr->rsv      = 0x00;
-		    	    msg->offset   = 0;
-		    	    msg->nrbytes  = 4;
-		    	    sk_ptr->peer->state = WAITING_CLOSE;
-		    	    enqueue_pending_msg(&(sk_ptr->peer->msgq), msg);
-			}
-			else
-			{
-			    return -1;
-					         			
-			}
-		    }
-		    else
-		    {
-			msg = alloc_msg_buffer(4 + 16 + 2);
-			if ( msg != NULL )
-		    	{
-		    	    hdr = (struct socks_hdr *)msg->buffer;
-		    	    hdr->ver      = 0x05;
-		    	    hdr->kind.rep = SUCCESS;
-		    	    hdr->rsv      = 0x00;
-		    	    hdr->atyp	  = IPV4ADDR;
-		    	    msg->offset   = 0;
-		    	    msg->nrbytes  = 4 + 16 + 2;
-		    	    memcpy( &((u_int8_t *)(msg->buffer))[SZS5HDR], &addr6.sin6_addr.s6_addr, 16 );
-		    	    memcpy( &((u_int8_t *)(msg->buffer))[SZS5HDR+ 16], &addr6.sin6_port, 2 );
-		    	    enqueue_pending_msg(&(sk_ptr->peer->msgq), msg);
-	    		    sk_ptr->state = PIPELINE;
-	    		    sk_ptr->peer->state = PENDING_SND_REPLY;
-	    		}
-			else
-			{
-			    return -1;
-			}
-		    }
-		}
-	    }
-	    else if ( so_error != EALREADY && so_error != EINPROGRESS )
-	    {
-		msg = alloc_msg_buffer(4);
-		if ( msg != NULL )
-		{
-		    hdr = (struct socks_hdr *)msg->buffer;
-		    hdr->ver      = 0x05;
-		    hdr->kind.rep = SFAILURE;
-		    hdr->rsv      = 0x00;
-		    msg->offset   = 0;
-		    msg->nrbytes  = 4;
-		    sk_ptr->peer->state = WAITING_CLOSE;
-		    enqueue_pending_msg(&(sk_ptr->peer->msgq), msg);
-		}
-		else
-		{
-		    return -1;
-		}
-	    }
-	}    
-	sk_ptr = sk_ptr->next;
-    }
-    return 0;
 }
 
 

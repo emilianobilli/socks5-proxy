@@ -80,7 +80,7 @@ bind_tcp_ipv6 (struct sockaddr_in6 *addr)
 
 
 int 
-get_so_error (int socket, int *so_error)
+connection_status (int socket, int *so_error)
 {
     socklen_t len;
     
