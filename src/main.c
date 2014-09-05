@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <netinet/in.h>
+#include <sys/time.h>
 
 int main(void)
 {
@@ -14,6 +15,7 @@ int main(void)
     struct sockaddr_in addr;
     struct tcp_socket *sk_ptr;
     struct tcp_socket_queue all,qrecv,qsend;
+    struct timeval t;
     int n;
     
     memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -55,22 +57,28 @@ int main(void)
     qrecv.tail = NULL;
     
     enqueue_tcp_socket(&all, sk_ptr);
-    
+
+        
     while (1)
     {
+	t.tv_sec = 0;
+	t.tv_usec = 200000;
 	
-	if (tcp_socket_select(&all, &qsend, &qrecv, NULL ) == -1)
+	if (tcp_socket_select(&all, &qsend, &qrecv, &t) == -1)
 	{
+	    perror("1");
 	    return -1;
 	}
 
 	if (read_all(&all,&qrecv) == -1)
 	{
+	    perror("2");
 	    return -1;
 	}
 	
 	if (flush_all(&qsend) == -1)
 	{
+	    perror("3");
 	    return -1;
 	}
 	clean_tcp_sockets(&all);

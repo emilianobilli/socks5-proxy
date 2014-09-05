@@ -18,7 +18,7 @@ main.o: main.c
 	
 
 proxy: main.o mem.o sockets.o socks5.o
-	$(CC) -Wall -O3 main.o mem.o sockets.o socks5.o -o proxy
+	$(CC) -Wall -ggdb main.o mem.o sockets.o socks5.o -o proxy
 
 clean:
 	rm *.o
