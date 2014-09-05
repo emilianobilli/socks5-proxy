@@ -32,6 +32,7 @@ int main(void)
 	perror("bind_tcp_ipv4");
 	return -1;
     }
+    
     tcp_reuseaddr(sd);
     sk_ptr = alloc_tcp_socket();
     if (sk_ptr == NULL)

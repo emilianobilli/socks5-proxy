@@ -39,6 +39,11 @@ accept_proxy_client(struct tcp_socket *sk, struct tcp_socket_queue *skq)
 	    sk_ptr = alloc_tcp_socket();
 	    if (sk_ptr != NULL_TCP_SOCKET)
 	    {
+		if (sk->family == AF_INET)
+		    sk_ptr->family = AF_INET;
+		else
+		    sk_ptr->family = AF_INET6;
+		    
 		sk_ptr->socket = sd;
 		sk_ptr->state  = WAITING_METHODS;
 		sk_ptr->kind   = SOCKET_PEER;
