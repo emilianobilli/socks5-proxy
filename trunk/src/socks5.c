@@ -260,8 +260,6 @@ manage_pipeline (struct tcp_socket *sk)
 
     errno = 0;
     
-    
-
     if (tcp_queue_len(sk->socket, &qlen) == -1)
 	qlen = 2 * 1024;
     else
@@ -274,6 +272,8 @@ manage_pipeline (struct tcp_socket *sk)
 
     if (msg != NULL)
     {
+	errno = 0;
+	
 	msglen = recv(sk->socket, msg->buffer, qlen, MSG_DONTWAIT);
 	if ( msglen > 0 )
 	{
@@ -518,7 +518,7 @@ flush_all (struct tcp_socket_queue *snd_queue)
 	if ( msg != NULL )
 	{
 	    errno = 0;
-	    slen = send(ptr->socket, &((u_int8_t *)(msg->buffer))[msg->offset], msg->nrbytes - msg->offset, MSG_DONTWAIT);
+	    slen = send(ptr->socket, &((u_int8_t *)(msg->buffer))[msg->offset], msg->nrbytes - msg->offset, MSG_DONTWAIT | MSG_NOSIGNAL);
 	    if ( slen != -1 )
 	    {
 
@@ -547,7 +547,7 @@ flush_all (struct tcp_socket_queue *snd_queue)
 		switch (errno)
 		{
 		    case ECONNRESET:
-
+		    case EPIPE:
 			ptr->state = CLOSE;
 			if ( ptr->peer )
 			    ptr->peer->state = CLOSE;
