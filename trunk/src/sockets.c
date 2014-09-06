@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/ioctl.h>
+#include <linux/sockios.h>
 
 int 
 accept_tcp_ipv4 (int sk, struct sockaddr_in *addr)
@@ -36,6 +38,14 @@ bind_tcp_ipv4 (struct sockaddr_in *addr)
 	return -1;
     }
     
+    if (tcp_reuseaddr(sd) == -1)
+    {
+	printf("mmm");
+	close(sd);
+	return -1;
+    }
+    
+
     len = sizeof(struct sockaddr_in);
     
     if (bind(sd, (struct sockaddr *) addr, len) == -1)
@@ -60,6 +70,12 @@ bind_tcp_ipv6 (struct sockaddr_in6 *addr)
     
     if ((sd =socket(PF_INET6, SOCK_STREAM, 0))== -1)
     {
+	return -1;
+    }
+
+    if (tcp_reuseaddr(sd) == -1)
+    {
+	close(sd);
 	return -1;
     }
     
@@ -177,13 +193,13 @@ tcp_window_clamp(int socket, u_int32_t ww_clamp )
 }
 
 int
-tcp_rcvbuf(int socket, u_int32_t buff_size )
+tcp_rcvbuff(int socket, u_int32_t buff_size )
 {
     return setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &buff_size, sizeof(u_int32_t));
 }
 
 int
-tcp_sndbuf(int socket, u_int32_t buff_size )
+tcp_sndbuff(int socket, u_int32_t buff_size )
 {
     return setsockopt(socket, SOL_SOCKET, SO_SNDBUF, &buff_size, sizeof(u_int32_t));
 }
@@ -193,4 +209,10 @@ tcp_reuseaddr(int socket)
 {
     int flag = 1;
     return setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
+}
+
+int 
+tcp_queue_len(int socket, u_int32_t *qlen)
+{
+    return ioctl(socket, SIOCINQ, qlen);
 }
