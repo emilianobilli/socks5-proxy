@@ -210,31 +210,6 @@ free_msg_buffer (struct msgbuff *msg)
     return;
 }    
 
-void clean_tcp_sockets ( struct tcp_socket_queue *q )
-{
-    struct tcp_socket *ptr;
-    struct tcp_socket_queue qtmp;
-    
-    qtmp.head = NULL;
-    qtmp.tail = NULL;
-    
-    while ( (ptr = dequeue_tcp_socket(q)) != NULL )
-    {
-	if (ptr->state == CLOSE)
-	{
-	    close(ptr->socket);
-	    free_tcp_socket(ptr);
-	} 
-	else
-	{
-	    enqueue_tcp_socket(&qtmp,ptr);
-	}
-    
-    }
-    q->head = qtmp.head;
-    q->tail = qtmp.tail;
-    return;
-}
 
 void dump_queue(FILE *f, const char *str, struct tcp_socket_queue *q, u_int8_t queue_type)
 {

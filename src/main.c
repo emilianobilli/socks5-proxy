@@ -22,7 +22,7 @@ int main(void)
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(1080);
     
-    inet_aton("10.3.3.70", &addr.sin_addr.s_addr);
+    inet_aton("192.168.1.16", &addr.sin_addr.s_addr);
     
           
     fflush(stdout);
@@ -35,7 +35,6 @@ int main(void)
 	return -1;
     }
     
-    tcp_reuseaddr(sd);
     sk_ptr = alloc_tcp_socket();
     if (sk_ptr == NULL)
     {
@@ -81,7 +80,7 @@ int main(void)
 	    perror("3");
 	    return -1;
 	}
-	clean_tcp_sockets(&all);
+	
     }
     
     return 0;

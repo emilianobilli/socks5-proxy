@@ -22,10 +22,12 @@ extern int tcp_nodelay(int socket);
 
 extern int tcp_window_clamp(int socket, u_int32_t ww_clamp );
 
-extern int tcp_rcvbuf(int socket, u_int32_t buff_size );
+extern int tcp_rcvbuff(int socket, u_int32_t buff_size );
 
-extern int tcp_sndbuf(int socket, u_int32_t buff_size );
+extern int tcp_sndbuff(int socket, u_int32_t buff_size );
 
 extern int tcp_reuseaddr(int socket);
+
+extern int tcp_queue_len(int socket, u_int32_t *qlen);
 
 

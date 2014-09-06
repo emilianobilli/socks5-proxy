@@ -255,14 +255,26 @@ int
 manage_pipeline (struct tcp_socket *sk)
 {
     struct msgbuff *msg;
+    u_int32_t qlen;
     ssize_t msglen;
 
-    errno = 0;    
-    msg = alloc_msg_buffer(1024*8);
+    errno = 0;
     
+    
+
+    if (tcp_queue_len(sk->socket, &qlen) == -1)
+	qlen = 2 * 1024;
+    else
+    {
+	if (qlen > 8 * 1024)
+	    qlen = 8 * 1024;
+    }
+
+    msg = alloc_msg_buffer(qlen);
+
     if (msg != NULL)
     {
-	msglen = recv(sk->socket, msg->buffer, 1024*8, MSG_DONTWAIT);
+	msglen = recv(sk->socket, msg->buffer, qlen, MSG_DONTWAIT);
 	if ( msglen > 0 )
 	{
 	    msg->nrbytes = msglen;
@@ -312,7 +324,9 @@ manage_connect (struct tcp_socket *sk)
     socklen_t		addrlen;
     size_t		iplen;
     size_t		bufflen;
-    
+    u_int32_t		wmem = 128*1024;
+    u_int32_t		rmem = 128*1024;
+
     
     errno = 0;
     if ( sk->kind == SOCKET_PASV && sk->state == WAITING_CONNECTION)
@@ -342,6 +356,8 @@ manage_connect (struct tcp_socket *sk)
 	}
 	else
 	{
+	    tcp_rcvbuff(sd,rmem);
+	    tcp_sndbuff(sd,wmem);
 	    close(sk->socket);
 	    sk->socket = sd;
 	    errcode = SUCCESS;
@@ -412,9 +428,9 @@ manage_connect (struct tcp_socket *sk)
     if ( errcode == 0x00 )
     {
 	memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR], 
-	        (sk->family == AF_INET) ? &addr4.sin_addr.s_addr : &addr6.sin6_addr.s6_addr, iplen);
+	        (sk->family == AF_INET) ? &(addr4.sin_addr.s_addr) : &(addr6.sin6_addr.s6_addr), iplen);
 	memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR+iplen], 
-	        (sk->family == AF_INET) ? &addr4.sin_port : &addr6.sin6_port, 2);
+	        (sk->family == AF_INET) ? &(addr4.sin_port) : &(addr6.sin6_port), 2);
     
 
         sk->peer->state = PENDING_SND_REPLY;    
@@ -560,7 +576,9 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
     int counter = 0;
     int n;
 
+    struct tcp_socket_queue qtmp;
     struct tcp_socket *ptr = NULL_TCP_SOCKET;
+    
     fd_set recvset;
     fd_set sendset;
     fd_set *recvts;
@@ -569,116 +587,123 @@ tcp_socket_select (struct tcp_socket_queue *all, struct tcp_socket_queue *send_q
     FD_ZERO(&recvset);
     FD_ZERO(&sendset);
     
-    if (all != NULL)
+
+    qtmp.head = NULL_TCP_SOCKET;
+    qtmp.tail = NULL_TCP_SOCKET;
+
+
+    while ( (ptr = dequeue_tcp_socket(all)) != NULL_TCP_SOCKET )
     {
-	ptr = all->head;
-	while ( ptr != NULL_TCP_SOCKET )
+	if (ptr->state == CLOSE)
 	{
-	    if ( ptr->kind == SOCKET_SERVER || ptr->kind == SOCKET_PASV )
+	    close(ptr->socket);
+	    free_tcp_socket(ptr);
+	    continue;
+	} 
+	else
+	{
+	    enqueue_tcp_socket(&qtmp,ptr);
+	}
+
+	if ( ptr->kind == SOCKET_SERVER || ptr->kind == SOCKET_PASV )
+	{
+	    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
+	    FD_SET(ptr->socket, &recvset);
+	    counter++;
+	}
+	else
+	{
+	    if ( ptr->state == WAITING_METHODS || 
+	         ptr->state == WAITING_REQUEST || 
+	         ptr->state == WAITING_USERPASS )
 	    {
-		maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
-		FD_SET(ptr->socket, &recvset);
-		counter++;
+	        maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
+	        FD_SET(ptr->socket, &recvset);
+	        counter++;
 	    }
-	    else
+	    else if ( ptr->state == PIPELINE )
 	    {
-		if ( ptr->state == WAITING_METHODS || 
-		     ptr->state == WAITING_REQUEST || 
-		     ptr->state == WAITING_USERPASS )
-		{
-		    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
-		    FD_SET(ptr->socket, &recvset);
-		    counter++;
-		}
-		else if ( ptr->state == PIPELINE )
-		{
-		    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
-		    FD_SET(ptr->socket, &recvset);
-		    counter++;
+	        maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
+	        FD_SET(ptr->socket, &recvset);
+	        counter++;
 		    
-		    if ( queue_filled(&(ptr->msgq)) )
-		    {
-			FD_SET(ptr->socket, &sendset);
-		    }
+	        if ( queue_filled(&(ptr->msgq)) )
+	        {
+		    FD_SET(ptr->socket, &sendset);
 		}
-		else if ( ptr->state == WAITING_CLOSE )
-		{
-		    if ( queue_filled(&(ptr->msgq)) )
-		    {
-			maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
-		        FD_SET(ptr->socket, &sendset);
-		        counter++;
-		    }
-		}
-		else if ( ptr->state == PENDING_SND_METHOD )
-		{
-		    if ( queue_filled(&(ptr->msgq)) )
-		    {
-			maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
-		        FD_SET(ptr->socket, &sendset);
-		        counter++;
-		    }
-		}
-		else if ( ptr->state == PENDING_SND_REPLY )
-		{
-		    if ( queue_filled(&(ptr->msgq)) )
-		    {
-			maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
-		        FD_SET(ptr->socket, &sendset);
-		        counter++;
-		    }
-		}
-/*		else if ( ptr->state == CONNECTING )
-		{
+	    }
+	    else if ( ptr->state == WAITING_CLOSE )
+	    {
+	        if ( queue_filled(&(ptr->msgq)) )
+	        {
 		    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
 		    FD_SET(ptr->socket, &sendset);
 		    counter++;
-		}*/
+		}
 	    }
-	    ptr = ptr->next;
-	}
-	recvts = (recv_q != NULL) ? &recvset : NULL;
-	sendts = (send_q != NULL) ? &sendset : NULL;
-    
-	if (counter == 0)
-	    return 0;
-	
-	n = select(maxfd+1, recvts, sendts, NULL, timeout);
-	if ( n == -1 )
-	    retval = -1;
-	else
-	{
-	    ptr = all->head;
-	    
-	    if ( recv_q != NULL ) 
+	    else if ( ptr->state == PENDING_SND_METHOD )
 	    {
-		recv_q->head = NULL_TCP_SOCKET;
-	        recv_q->tail = NULL_TCP_SOCKET;
+	        if ( queue_filled(&(ptr->msgq)) )
+	        {
+		    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
+		    FD_SET(ptr->socket, &sendset);
+		    counter++;
+		}
+    	    }
+	    else if ( ptr->state == PENDING_SND_REPLY )
+	    {
+	        if ( queue_filled(&(ptr->msgq)) )
+	        {
+	    	    maxfd = (maxfd > ptr->socket) ? maxfd : ptr->socket;
+	            FD_SET(ptr->socket, &sendset);
+	            counter++;
+	        }
 	    }
+	}
+    }
+    recvts = (recv_q != NULL) ? &recvset : NULL;
+    sendts = (send_q != NULL) ? &sendset : NULL;
+    
+    all->head = qtmp.head;
+    all->tail = qtmp.tail;
+
+    if (counter == 0) 
+        return 0;
+
+    n = select(maxfd+1, recvts, sendts, NULL, timeout);
+    if ( n == -1 )
+        retval = -1;
+    else
+    {
+        ptr = all->head;
+	    
+        if ( recv_q != NULL ) 
+        {
+	    recv_q->head = NULL_TCP_SOCKET;
+	    recv_q->tail = NULL_TCP_SOCKET;
+	}
+	if ( send_q != NULL )
+	{
+	    send_q->head = NULL_TCP_SOCKET;
+	    send_q->tail = NULL_TCP_SOCKET;
+	}
+	while ( ptr != NULL_TCP_SOCKET )
+	{
 	    if ( send_q != NULL )
 	    {
-		send_q->head = NULL_TCP_SOCKET;
-	        send_q->tail = NULL_TCP_SOCKET;
+	        if (FD_ISSET(ptr->socket, sendts))
+	        {
+	            enqueue_rdy_send(send_q, ptr);
+	        }	
 	    }
-	    while ( ptr != NULL_TCP_SOCKET )
+	    if ( recv_q != NULL )
 	    {
-		if ( send_q != NULL )
-		{
-		    if (FD_ISSET(ptr->socket, sendts))
-		    {
-		        enqueue_rdy_send(send_q, ptr);
-		    }	
+	        if (FD_ISSET(ptr->socket, recvts) || ptr->state == CONNECTING)
+	        {
+		    enqueue_rdy_recv(recv_q, ptr);
 		}
-		if ( recv_q != NULL )
-		{
-		    if (FD_ISSET(ptr->socket, recvts) || ptr->state == CONNECTING)
-		    {
-			enqueue_rdy_recv(recv_q, ptr);
-		    }
-		    
-		}	
-		ptr = ptr->next;
-	    }
+	    }	
+	    ptr = ptr->next;
 	}
     } 
     return retval;
