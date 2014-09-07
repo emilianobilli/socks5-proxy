@@ -192,7 +192,7 @@ manage_request (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 		    addr4.sin_port   = sockname.port;
 		    memcpy(&addr4.sin_addr.s_addr, &sockname.in.addr4, 4);
 	
-		    sd = connect_tcp_ipv4(&addr4, 1, 128*1024, 128*1024);
+		    sd = connect_tcp_ipv4(&addr4, 1, 128*512, 128*1024);
 		    
 		    sk_ptr = alloc_tcp_socket();
 		    if ( sk_ptr != NULL_TCP_SOCKET )
