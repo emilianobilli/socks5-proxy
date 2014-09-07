@@ -31,6 +31,8 @@ int
 bind_tcp_ipv4 (struct sockaddr_in *addr)
 {
     int sd;
+    u_int32_t rwin = 128*1024;
+    u_int32_t wwin = 128*1024;
     socklen_t len;
     
     if ((sd =socket(PF_INET, SOCK_STREAM, 0))== -1)
@@ -44,7 +46,6 @@ bind_tcp_ipv4 (struct sockaddr_in *addr)
 	close(sd);
 	return -1;
     }
-    
 
     len = sizeof(struct sockaddr_in);
     
@@ -53,6 +54,8 @@ bind_tcp_ipv4 (struct sockaddr_in *addr)
 	close(sd);
 	return -1;
     }
+tcp_rcvbuff(sd,&rwin);
+    tcp_sndbuff(sd,&wwin);
 
     if (listen(sd, 20) == -1)
     {
@@ -66,6 +69,8 @@ int
 bind_tcp_ipv6 (struct sockaddr_in6 *addr)
 {
     int sd;
+    u_int32_t rwin = 128*1024;
+    u_int32_t wwin = 128*1024;
     socklen_t len;
     
     if ((sd =socket(PF_INET6, SOCK_STREAM, 0))== -1)
@@ -86,6 +91,8 @@ bind_tcp_ipv6 (struct sockaddr_in6 *addr)
 	close(sd);
 	return -1;
     }
+    tcp_rcvbuff(sd,&rwin);
+    tcp_sndbuff(sd,&wwin);
     if (listen(sd, 20) == -1)
     {
 	close(sd);
@@ -110,13 +117,19 @@ int
 connect_tcp_ipv4 (struct sockaddr_in *addr, int nonblock)
 {
     int sd;
-	
+    u_int32_t rwin = 128*1024;
+    u_int32_t wwin = 128*1024;
+
+
     errno = 0;
 	    
     if ((sd = socket(PF_INET, SOCK_STREAM, 0)) == -1) 
     {
         return -1;
     }    
+
+    tcp_rcvbuff(sd,&rwin);
+    tcp_sndbuff(sd,&wwin);
 
     if (nonblock)
     {
@@ -139,6 +152,9 @@ int
 connect_tcp_ipv6 (struct sockaddr_in6 *addr, int nonblock)
 {
     int sd;
+    u_int32_t rwin = 128*1024;
+    u_int32_t wwin = 128*1024;
+
     
     errno = 0;
 	    /* Crea el zocalo */
@@ -152,7 +168,11 @@ connect_tcp_ipv6 (struct sockaddr_in6 *addr, int nonblock)
 	if (fcntl(sd, F_SETFL, O_NONBLOCK) == -1)
 	    return -1;
     }
-    	    
+    
+
+    tcp_rcvbuff(sd,&rwin);
+    tcp_sndbuff(sd,&wwin);
+
     if (connect(sd, (struct sockaddr *)addr, sizeof(struct sockaddr_in6)) == -1)
     {
 	if (errno != EINPROGRESS) 

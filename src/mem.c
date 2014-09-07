@@ -219,7 +219,7 @@ void dump_queue(FILE *f, const char *str, struct tcp_socket_queue *q, u_int8_t q
     sk = q->head;
     while (sk != NULL)
     {
-	fprintf(f, "h: %p | t: %p {%s} - %d[%p] - State: %d - Kind: %d - Socket: %d - Next: %p - Peer: %p - Queue: %d\n", q->head, 
+	fprintf(f, "h: %p | t: %p {%s} - %d[%p] - State: %d - Kind: %d - Socket: %d - Next: %p - Peer: %p - Queue: %p\n", q->head, 
 															       q->tail,
 															       str,
 															       i, 
