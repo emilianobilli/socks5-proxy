@@ -28,7 +28,7 @@ accept_proxy_client(struct tcp_socket *sk, struct tcp_socket_queue *skq)
     {
 	if (sk->family == AF_INET)
 	{
-	    sd = accept_tcp_ipv4(sk->socket, &addr4);    
+	    sd = accept_tcp_ipv4(sk->socket, &addr4);
 	}
 	else
 	{
@@ -259,7 +259,7 @@ manage_pipeline (struct tcp_socket *sk)
     ssize_t msglen;
 
     errno = 0;
-    
+
     if (tcp_queue_len(sk->socket, &qlen) == -1)
 	qlen = 2 * 1024;
     else
@@ -272,8 +272,6 @@ manage_pipeline (struct tcp_socket *sk)
 
     if (msg != NULL)
     {
-	errno = 0;
-	
 	msglen = recv(sk->socket, msg->buffer, qlen, MSG_DONTWAIT);
 	if ( msglen > 0 )
 	{
@@ -324,10 +322,7 @@ manage_connect (struct tcp_socket *sk)
     socklen_t		addrlen;
     size_t		iplen;
     size_t		bufflen;
-    u_int32_t		wmem = 128*1024;
-    u_int32_t		rmem = 128*1024;
 
-    
     errno = 0;
     if ( sk->kind == SOCKET_PASV && sk->state == WAITING_CONNECTION)
     {
@@ -356,8 +351,6 @@ manage_connect (struct tcp_socket *sk)
 	}
 	else
 	{
-	    tcp_rcvbuff(sd,rmem);
-	    tcp_sndbuff(sd,wmem);
 	    close(sk->socket);
 	    sk->socket = sd;
 	    errcode = SUCCESS;
@@ -548,6 +541,7 @@ flush_all (struct tcp_socket_queue *snd_queue)
 		{
 		    case ECONNRESET:
 		    case EPIPE:
+
 			ptr->state = CLOSE;
 			if ( ptr->peer )
 			    ptr->peer->state = CLOSE;
