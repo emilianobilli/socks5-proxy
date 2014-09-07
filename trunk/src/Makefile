@@ -1,6 +1,6 @@
 
 CC := gcc
-CFLAGSO := -c -Wall -v -ggdb
+CFLAGSO := -c -Wall -ggdb
 
 all: mem.o sockets.o socks5.o main.o proxy
 
