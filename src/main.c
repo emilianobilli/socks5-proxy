@@ -26,7 +26,7 @@ int main(void)
     
           
     fflush(stdout);
-    sd = bind_tcp_ipv4(&addr);
+    sd = bind_tcp_ipv4(&addr, 128*1024, 128*1024);
     
     
     if (sd == -1)

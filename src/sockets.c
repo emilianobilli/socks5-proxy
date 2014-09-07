@@ -9,6 +9,11 @@
 #include <sys/ioctl.h>
 #include <linux/sockios.h>
 
+
+int tcp_rcvbuff(int socket, u_int32_t buff_size );
+int tcp_sndbuff(int socket, u_int32_t buff_size );
+int tcp_reuseaddr(int socket);
+
 int 
 accept_tcp_ipv4 (int sk, struct sockaddr_in *addr)
 {
@@ -28,11 +33,10 @@ accept_tcp_ipv6 (int sk, struct sockaddr_in6 *addr)
 
 
 int 
-bind_tcp_ipv4 (struct sockaddr_in *addr)
+bind_tcp_ipv4 (struct sockaddr_in *addr, u_int32_t rwin, u_int32_t wwin)
 {
     int sd;
-    u_int32_t rwin = 128*1024;
-    u_int32_t wwin = 128*1024;
+
     socklen_t len;
     
     if ((sd =socket(PF_INET, SOCK_STREAM, 0))== -1)
@@ -42,7 +46,6 @@ bind_tcp_ipv4 (struct sockaddr_in *addr)
     
     if (tcp_reuseaddr(sd) == -1)
     {
-	printf("mmm");
 	close(sd);
 	return -1;
     }
@@ -54,8 +57,9 @@ bind_tcp_ipv4 (struct sockaddr_in *addr)
 	close(sd);
 	return -1;
     }
-tcp_rcvbuff(sd,&rwin);
-    tcp_sndbuff(sd,&wwin);
+    
+    tcp_rcvbuff(sd,rwin);
+    tcp_sndbuff(sd,wwin);
 
     if (listen(sd, 20) == -1)
     {
@@ -66,11 +70,10 @@ tcp_rcvbuff(sd,&rwin);
 }
 
 int 
-bind_tcp_ipv6 (struct sockaddr_in6 *addr)
+bind_tcp_ipv6 (struct sockaddr_in6 *addr, u_int32_t rwin, u_int32_t wwin)
 {
     int sd;
-    u_int32_t rwin = 128*1024;
-    u_int32_t wwin = 128*1024;
+
     socklen_t len;
     
     if ((sd =socket(PF_INET6, SOCK_STREAM, 0))== -1)
@@ -91,8 +94,8 @@ bind_tcp_ipv6 (struct sockaddr_in6 *addr)
 	close(sd);
 	return -1;
     }
-    tcp_rcvbuff(sd,&rwin);
-    tcp_sndbuff(sd,&wwin);
+    tcp_rcvbuff(sd,rwin);
+    tcp_sndbuff(sd,wwin);
     if (listen(sd, 20) == -1)
     {
 	close(sd);
@@ -114,12 +117,9 @@ connection_status (int socket, int *so_error)
 
 
 int 
-connect_tcp_ipv4 (struct sockaddr_in *addr, int nonblock)
+connect_tcp_ipv4 (struct sockaddr_in *addr, int nonblock, u_int32_t rwin, u_int32_t wwin)
 {
     int sd;
-    u_int32_t rwin = 128*1024;
-    u_int32_t wwin = 128*1024;
-
 
     errno = 0;
 	    
@@ -128,8 +128,8 @@ connect_tcp_ipv4 (struct sockaddr_in *addr, int nonblock)
         return -1;
     }    
 
-    tcp_rcvbuff(sd,&rwin);
-    tcp_sndbuff(sd,&wwin);
+    tcp_rcvbuff(sd,rwin);
+    tcp_sndbuff(sd,wwin);
 
     if (nonblock)
     {
@@ -149,11 +149,9 @@ connect_tcp_ipv4 (struct sockaddr_in *addr, int nonblock)
 }
 
 int 
-connect_tcp_ipv6 (struct sockaddr_in6 *addr, int nonblock)
+connect_tcp_ipv6 (struct sockaddr_in6 *addr, int nonblock, u_int32_t rwin, u_int32_t wwin)
 {
     int sd;
-    u_int32_t rwin = 128*1024;
-    u_int32_t wwin = 128*1024;
 
     
     errno = 0;
@@ -170,8 +168,8 @@ connect_tcp_ipv6 (struct sockaddr_in6 *addr, int nonblock)
     }
     
 
-    tcp_rcvbuff(sd,&rwin);
-    tcp_sndbuff(sd,&wwin);
+    tcp_rcvbuff(sd,rwin);
+    tcp_sndbuff(sd,wwin);
 
     if (connect(sd, (struct sockaddr *)addr, sizeof(struct sockaddr_in6)) == -1)
     {

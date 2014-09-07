@@ -192,7 +192,7 @@ manage_request (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 		    addr4.sin_port   = sockname.port;
 		    memcpy(&addr4.sin_addr.s_addr, &sockname.in.addr4, 4);
 	
-		    sd = connect_tcp_ipv4(&addr4,1);
+		    sd = connect_tcp_ipv4(&addr4, 1, 128*1024, 128*1024);
 		    
 		    sk_ptr = alloc_tcp_socket();
 		    if ( sk_ptr != NULL_TCP_SOCKET )
@@ -217,7 +217,7 @@ manage_request (struct tcp_socket *sk, struct tcp_socket_queue *skq)
 		    addr6.sin6_port   = sockname.port;
 		    memcpy(&addr6.sin6_addr.s6_addr, &sockname.in.addr6, 16);
 
-		    sd = connect_tcp_ipv6(&addr6,1);
+		    sd = connect_tcp_ipv6(&addr6,1, 128*1024, 128*1024);
 		        
 		    sk_ptr = alloc_tcp_socket();
 		    if ( sk_ptr != NULL_TCP_SOCKET )
@@ -424,7 +424,6 @@ manage_connect (struct tcp_socket *sk)
 	        (sk->family == AF_INET) ? &(addr4.sin_addr.s_addr) : &(addr6.sin6_addr.s6_addr), iplen);
 	memcpy(&((u_int8_t *)(msg->buffer))[SZS5HDR+iplen], 
 	        (sk->family == AF_INET) ? &(addr4.sin_port) : &(addr6.sin6_port), 2);
-    
 
         sk->peer->state = PENDING_SND_REPLY;    
 	sk->state = PIPELINE;
